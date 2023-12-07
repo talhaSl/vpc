@@ -1,72 +1,49 @@
+terraform {
+  required_version = ">= 0.12"
+}
+
 provider "aws" {
-  region = "us-east-1"
+  region = "us-west-2"
 }
 
-resource "aws_vpc" "my_vpc" {
-  cidr_block = "10.0.0.0/16"
-}
-
-resource "aws_subnet" "subnet_a" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
-}
-
-resource "aws_subnet" "subnet_b" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
-}
-
-resource "aws_subnet" "subnet_c" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "10.0.3.0/24"
-  availability_zone = "us-east-1c"
+resource "aws_vpc" "dev_alpha" {
+  cidr_block           = "10.150.0.0/24"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
 }
 
 resource "aws_subnet" "private_subnet_a" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "10.0.4.0/24"
-  availability_zone = "us-east-1a"
+  vpc_id                  = aws_vpc.dev_alpha.id
+  cidr_block              = "10.150.0.0/26"
+  availability_zone       = "us-west-2a" #
+  map_public_ip_on_launch = false
 }
 
 resource "aws_subnet" "private_subnet_b" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "10.0.5.0/24"
-  availability_zone = "us-east-1b"
+  vpc_id                  = aws_vpc.dev_alpha.id
+  cidr_block              = "10.150.0.64/26"
+  availability_zone       = "us-west-2b"
+  map_public_ip_on_launch = false
 }
 
-resource "aws_subnet" "private_subnet_c" {
-  vpc_id            = aws_vpc.my_vpc.id
-  cidr_block        = "10.0.6.0/24"
-  availability_zone = "us-east-1c"
+resource "aws_internet_gateway" "dev_alpha_igw" {
+  vpc_id = aws_vpc.dev_alpha.id
 }
 
-resource "aws_internet_gateway" "my_igw" {
-  vpc_id = aws_vpc.my_vpc.id
-}
+resource "aws_cloudtrail" "dev_alpha_cloudtrail" {
+  name                          = "dev-alpha-cloudtrail"
+  s3_bucket_name                = "dev-alpha-s3-bucket" 
+  enable_logging                = true
+  include_global_service_events = true
 
-resource "aws_route_table" "public_route_table" {
-  vpc_id = aws_vpc.my_vpc.id
-}
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::dev-alpha-s3-bucket/*"] 
+    }
+  }
 
-resource "aws_route" "public_route" {
-  route_table_id         = aws_route_table.public_route_table.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.my_igw.id
-}
-
-resource "aws_route_table_association" "subnet_a_association" {
-  subnet_id      = aws_subnet.subnet_a.id
-  route_table_id = aws_route_table.public_route_table.id
-}
-
-resource "aws_route_table_association" "subnet_b_association" {
-  subnet_id      = aws_subnet.subnet_b.id
-  route_table_id = aws_route_table.public_route_table.id
-}
-
-resource "aws_route_table_association" "subnet_c_association" {
-  subnet_id      = aws_subnet.subnet_c.id
-  route_table_id = aws_route_table.public_route_table.id
+  depends_on = [aws_vpc.dev_alpha] # Ensure the VPC is created before CloudTrail
 }
